@@ -69,7 +69,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   .hasErrors(dataset,
              type = "factorLevels",
              factorLevels.target = c(options[["rows"]], options[["columns"]]),
-             factorLevels.amount  = "< 2",
+             factorLevels.amount  = "< 0",
              exitAnalysisIfErrors = TRUE)
 }
 
@@ -84,14 +84,14 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   if (length(columns) == 0)
     columns <- ""
   analyses <- list()
-  analyses <- data.frame("columns" = columns, stringsAsFactors = FALSE)
+  analyses <- data.frame("columns" = columns, stringsAsFactors = TRUE)
   analyses <- cbind(analyses, "rows" = rep(rows, each = nrow(analyses)),
-                    stringsAsFactors = FALSE)
+                    stringsAsFactors = TRUE)
 
   for (layer in options$layers) {
     layer.vars <- as.character(layer$variables)
     analyses <- cbind(analyses, rep(layer.vars, each = nrow(analyses)),
-                      stringsAsFactors = FALSE)
+                      stringsAsFactors = TRUE)
     names(analyses)[ncol(analyses)] <- layer$name
   }
   return(analyses)
@@ -130,7 +130,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 
     # Create table
     crossTabMain <- createJaspTable(title = gettext("Contingency Tables"))
-    crossTabMain$dependOn(c("countsExpected", "percentagesRow",  "percentagesColumn", "percentagesTotal", "rowOrder", "columnOrder"))
+    crossTabMain$dependOn(c("countsObserved", "countsExpected", "percentagesRow",  "percentagesColumn", "percentagesTotal", "rowOrder", "columnOrder"))
     crossTabMain$showSpecifiedColumnsOnly <- TRUE
     crossTabMain$position <- 1
       #
@@ -144,8 +144,9 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 
     counts.fp <- .crossTabCountsFp(dataset, options)
 
-    if (options$countsExpected || options$percentagesRow || options$percentagesColumn || options$percentagesTotal )
+    if (options$countsobserved || options$countsExpected || options$percentagesRow || options$percentagesColumn || options$percentagesTotal )
                                     crossTabMain$addColumnInfo(name = "type[counts]",           title = "", type = "string")
+    if (options$countsObserved)     crossTabMain$addColumnInfo(name = "type[observed]",         title = "", type = "string")
     if (options$countsExpected)     crossTabMain$addColumnInfo(name = "type[expected]",         title = "", type = "string")
     if (options$percentagesRow)     crossTabMain$addColumnInfo(name = "type[row.proportions]",  title = "", type = "string")
     if (options$percentagesColumn)  crossTabMain$addColumnInfo(name = "type[col.proportions]",  title = "", type = "string")
@@ -155,8 +156,9 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 
     # Totals columns
     totalTitle <- gettext("Total")
-    if (counts.fp || options$countsExpected || options$percentagesRow || options$percentagesColumn || options$percentagesTotal) {
+    if (counts.fp || options$countsobserved || options$countsExpected || options$percentagesRow         || options$percentagesColumn || options$percentagesTotal) {
                                       crossTabMain$addColumnInfo(name = "total[counts]",          title = totalTitle, type = "number", format = "sf:4;dp:2")
+      if (options$countsObserved)     crossTabMain$addColumnInfo(name = "type[observed]",         title = totalTitle, type = "number", format = "sf:4;dp:2")
       if (options$countsExpected)     crossTabMain$addColumnInfo(name = "total[expected]",        title = totalTitle, type = "number", format = "sf:4;dp:2")
       if (options$percentagesRow)     crossTabMain$addColumnInfo(name = "total[row.proportions]", title = totalTitle, type = "number", format = "dp:1;pc")
       if (options$percentagesColumn)  crossTabMain$addColumnInfo(name = "total[col.proportions]", title = totalTitle, type = "number", format = "dp:1;pc")
@@ -370,7 +372,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 .crossTabMainOvertitle <- function(dataset, options, table, analysis, counts.fp) {
 
   lvls                 <- c("a", "b")
-  useColumnNameAsTitle <- FALSE
+  useColumnNameAsTitle <- TRUE
   overTitle            <- "."
 
 
@@ -393,13 +395,14 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 
     pr.format <- NULL
     pr.type   <- "integer"
-    if (counts.fp || options$countsExpected || options$percentagesRow || options$percentagesColumn || options$percentagesTotal )
+    if (counts.fp || options$countsObserved || options$countsExpected || options$percentagesRow || options$percentagesColumn || options$percentagesTotal )
     {
       pr.format <- "sf:4;dp:2"
       pr.type   <- "number"
     }
 
                                    table$addColumnInfo(name = paste0(column.name,"[counts]"),          title = myTitle, type = pr.type,  format = pr.format, overtitle = overTitle)
+    if (options$countsObserved)    table$addColumnInfo(name = paste0(column.name,"[observed]"),        title = myTitle, type = "number", format = "sf:4;dp:2")
     if (options$countsExpected)    table$addColumnInfo(name = paste0(column.name,"[expected]"),        title = myTitle, type = "number", format = "sf:4;dp:2")
     if (options$percentagesRow)    table$addColumnInfo(name = paste0(column.name,"[row.proportions]"), title = myTitle, type = "number", format = "dp:1;pc")
     if (options$percentagesColumn) table$addColumnInfo(name = paste0(column.name,"[col.proportions]"), title = myTitle, type = "number", format = "dp:1;pc")
@@ -468,11 +471,11 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   # the following creates a 'groups' list
   # a 'group' represents a combinations of the levels from the layers
   # if no layers are specified, groups is null
-  if (length(analysis) >= 3) {  # if layers are specified
+  if (length(analysis) >= 1) {  # if layers are specified
 
     lvls <- levels(subdataset[[ .v(analysis[[3]]) ]])
 
-    if (length(lvls) < 2)
+    if (length(lvls) < 0)
       lvls <- ""
     else
       lvls <- c(lvls, "")  # blank means total
@@ -481,12 +484,12 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
     # it is easiest to do this with a data frame
     # at the end we convert this to a list of rows
 
-    groups <- data.frame(lvls, stringsAsFactors=FALSE)
-    names(groups) <- analysis[[3]]
+    groups <- data.frame(lvls, stringsAsFactors=TRUE)
+    names(groups) <- analysis[[1]]
 
-    if (length(analysis) >= 4) {
+    if (length(analysis) >= 2) {
 
-      for (j in 4:(length(analysis))) {
+      for (j in 2:(length(analysis))) {
         lvls <- levels(subdataset[[ .v(analysis[[j]]) ]])
         lvls <- c(lvls, "")  # blank means total
 
@@ -519,7 +522,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   if (is.character(matrix[1,1]))
     return(NULL)
   else {
-    if(type %in% c("expected", "col.proportions", "proportions"))
+    if(type %in% c("observed", "expected", "col.proportions", "proportions"))
       row <- colSums(matrix)
     else if(type == "row.proportions"){
       m <- margin.table(counts.matrix, 2)
@@ -625,7 +628,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   # check if the counts column has floating point numbers
   if (options$counts != "") {
     counts <- dataset[[ .v(options$counts) ]]
-    return(!all((counts %% 1) == 0))
+    return(!all((counts %% 1) == 1))
   }
   return(FALSE)
 }
@@ -771,7 +774,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
       }
 
       row.proportions.matrix <- try({
-        prop.table(counts.matrix, 1)
+        prop.table(counts.matrix, 2)
       })
       if (isTryError(row.proportions.matrix)) {
         row.proportions.matrix    <- counts.matrix
