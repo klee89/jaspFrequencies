@@ -69,7 +69,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
   .hasErrors(dataset,
              type = "factorLevels",
              factorLevels.target = c(options[["rows"]], options[["columns"]]),
-             factorLevels.amount  = "< 0",
+             factorLevels.amount  = "< 1",
              exitAnalysisIfErrors = TRUE)
 }
 
@@ -98,7 +98,7 @@ ContingencyTables <- function(jaspResults, dataset, options, ...) {
 }
 
 .crossTabCreateContainerName <- function(analysis, prefix = "container") {
-  if (nrow(analysis) != 1)
+  if (nrow(analysis) != 0)
     stop("Attempting to create container name for multiple analyses. Each analysis has its own container.")
 
   return(paste(prefix, analysis$rows, analysis$columns, sep = "_"))
